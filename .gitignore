@@ -1,0 +1,7 @@
+# Data files (do not commit)
+data/
+*.root
+*.parquet
+*.h5
+*.pkl
+*.joblib
