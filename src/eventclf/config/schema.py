@@ -22,6 +22,23 @@ class DatasetSchema:
     def feature_names(self) -> Tuple[str, ...]:
         return tuple(f.name for f in self.features)
 
+    @classmethod
+    def from_feature_names(
+        cls,
+        feature_names: Tuple[str, ...] | list[str],
+        label: str = "label",
+        weight: Optional[str] = None,
+        event_id: Optional[str] = "event",
+        extra_cols: Tuple[str, ...] = (),
+    ) -> "DatasetSchema":
+        return cls(
+            features=tuple(FeatureSpec(name) for name in feature_names),
+            label=label,
+            weight=weight,
+            event_id=event_id,
+            extra_cols=extra_cols,
+        )
+
 
 # ---- Example schema (MUST be defined at module level) ----
 HMUMU_ZH2L_SCHEMA = DatasetSchema(

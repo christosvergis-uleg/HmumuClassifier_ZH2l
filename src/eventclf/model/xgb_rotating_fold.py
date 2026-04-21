@@ -7,8 +7,13 @@ from packaging import version
 import numpy as np
 import xgboost as xgb
 from sklearn.model_selection import RandomizedSearchCV
+from sklearn.calibration import CalibratedClassifierCV
+from sklearn.metrics import roc_auc_score, average_precision_score
 
 from .base import _prob1
+import logging
+log = logging.getLogger(__name__)
+import time
 
 @dataclass
 class XGBRotatingBlindTrainer:
@@ -35,6 +40,7 @@ class XGBRotatingBlindTrainer:
     scoring: str = "neg_log_loss"
     random_state: int = 42
     verbose: int = 0
+    calib_mod_method: str = "sigmoid"
 
     models_: List[xgb.XGBClassifier] = field(default_factory=list, init=False)
     best_params_per_fold_: List[Dict[str, Any]] = field(default_factory=list, init=False)
@@ -61,8 +67,16 @@ class XGBRotatingBlindTrainer:
         self.best_params_per_fold_.clear()
 
         for k in range(self.n_folds):
+            t0 = time.time()
+            log.info("[Fold %d/%d] Starting rotating blind step", k  + 1, self.n_folds)
             tr_idx = np.where(fold_id != k)[0]
             te_idx = np.where(fold_id == k)[0]
+            log.info("[Fold %d/%d] Using fold %d as blind test set", k + 1, self.n_folds, k)
+
+            log.info("[Fold %d/%d] Train size: %d | Test size: %d", k + 1, self.n_folds, 
+                len(tr_idx),
+                len(te_idx),
+            )
 
             Xtr, ytr = X[tr_idx], y[tr_idx]
             wtr = w_arr[tr_idx] if w_arr is not None else None
@@ -73,6 +87,8 @@ class XGBRotatingBlindTrainer:
             else: 
                 estimator = xgb.XGBClassifier(**self.base_params)
 
+            log.info("[Fold %d/%d] Starting hyperparameter tuning (%d iterations, %d-fold CV)",
+                k + 1, self.n_folds, self.n_iter, self.inner_cv,)
             rs = RandomizedSearchCV(
                 estimator=estimator,
                 param_distributions=self.param_distributions,
@@ -82,10 +98,14 @@ class XGBRotatingBlindTrainer:
                 random_state=self.random_state + k,
                 verbose=self.verbose,
             )
+
             if wtr is not None:
                 rs.fit(Xtr, ytr, sample_weight=wtr)
             else:
                 rs.fit(Xtr, ytr)
+            log.info( "[Fold %d/%d] Best params: %s", k + 1, self.n_folds, rs.best_params_,)
+
+            log.info( "[Fold %d/%d] Best score: %.6f", k + 1, self.n_folds, rs.best_score_,)
 
             best_params = dict(self.base_params)
             best_params.update(dict(rs.best_params_))
@@ -93,16 +113,42 @@ class XGBRotatingBlindTrainer:
 
             # --- Train final model on all 4 folds (no peeking at fold k) ---
             model = xgb.XGBClassifier(**best_params, use_label_encoder=False)
+            log.info("[Fold %d/%d] Training final model on training folds", k + 1, self.n_folds)
             if wtr is not None:
                 model.fit(Xtr, ytr, sample_weight=wtr, verbose=False)
             else:
                 model.fit(Xtr, ytr, verbose=False)
 
+            #log.info("[Fold %d/%d] Fitting calibrated model with method='%s'", k + 1, self.n_folds, self.calib_mod_method)
+            #cal_model = CalibratedClassifierCV(estimator=model, method=self.calib_mod_method, cv=3,)
+            #if wtr is not None:
+            #    cal_model.fit(Xtr, ytr, sample_weight=wtr)
+            #else:
+            #    cal_model.fit(Xtr, ytr)
+
             # --- Blind prediction on held-out fold k ---
+            log.info("[Fold %d/%d] Predicting on blind fold", k + 1, self.n_folds)
             p_te = _prob1(model.predict_proba(X[te_idx]))
             self.blind_pred_[te_idx] = p_te
 
             self.models_.append(model)
+            if w_arr is not None:
+                fold_auc = roc_auc_score(y[te_idx], p_te, sample_weight=w_arr[te_idx])
+                fold_ap = average_precision_score(y[te_idx], p_te, sample_weight=w_arr[te_idx])
+            else:
+                fold_auc = roc_auc_score(y[te_idx], p_te)
+                fold_ap = average_precision_score(y[te_idx], p_te)
+
+            log.info(
+                "[Fold %d/%d] Blind-fold metrics | AUC=%.6f | AP=%.6f",
+                k + 1,
+                self.n_folds,
+                fold_auc,
+                fold_ap,
+            )
+
+            log.info("[Fold %d/%d] Done", k + 1, self.n_folds)
+            log.info("[Fold %d/%d] Completed in %.1f seconds",k + 1, self.n_folds, time.time() - t0,)
 
         if np.isnan(self.blind_pred_).any():
             raise RuntimeError("blind_pred_ contains NaNs. Check fold_id coverage.")

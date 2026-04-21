@@ -1,0 +1,48 @@
+{
+  "tree_name": "tree_Hmumu",
+  "signal_files": ["data/signal_ZH_training.root"],
+  "background_files": [
+    "data/DY_training.root",
+    "data/VV_training.root",
+    "data/top_training.root"
+  ],
+  "event_id_column": "event",
+  "weight_column": "weight",
+  "n_folds_outer": 5,
+  "random_state": 42,
+  "verbose": 1,
+  "tuning": {
+    "n_iter": 50,
+    "scoring": "average_precision"
+  },
+  "features_final": [
+    "Muons_PT_Lead",
+    "Muons_PT_Sub",
+    "Event_VT_over_HT",
+    "dR_mu0_mu1",
+    "Jets_jetMultip",
+    "Event_MET",
+    "Muons_CosThetaStar",
+    "Event_MET_Sig",
+    "DPHI_MET_DIMU"
+  ],
+  "base_params": {
+    "objective": "binary:logistic",
+    "eval_metric": "logloss",
+    "tree_method": "hist",
+    "n_estimators": 300,
+    "n_jobs": 8,
+    "scale_pos_weight" : 3000
+  },
+  "param_distributions": {
+    "max_depth": [3, 4, 5],
+    "learning_rate": [0.01, 0.03, 0.05],
+    "subsample": [0.6, 0.8, 1.0],
+    "colsample_bytree": [0.6, 0.8, 1.0],
+    "min_child_weight": [1.0, 2.0, 5.0],
+    "reg_lambda": [0.5, 1.0, 2.0, 5.0],
+    "gamma": [0.0, 0.1, 0.5],
+    "n_estimators": [300, 600, 1000]
+  },
+  "weight_mode": "positive_only"
+}

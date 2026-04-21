@@ -5,3 +5,6 @@ data/
 *.h5
 *.pkl
 *.joblib
+artifacts*
+*.png
+*.zip
