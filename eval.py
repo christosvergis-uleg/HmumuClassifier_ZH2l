@@ -4,8 +4,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-df_main = pd.read_parquet("artifacts_eval_xgbrot_niter100_ap/blind_predictions_full_signed.parquet")
-df_other = pd.read_parquet("artifacts_eval_xgbrot_niter100_ap/scores_signal_other.parquet")
+#df_main = pd.read_parquet("artifacts_eval_xgbrot_niter100_ap/blind_predictions_full_signed.parquet")
+#df_other = pd.read_parquet("artifacts_eval_xgbrot_niter100_ap/scores_signal_other.parquet")
+
+df_main = pd.read_parquet("artifacts_eval_xgboost_test/blind_predictions_full_signed.parquet")
+df_other = pd.read_parquet("artifacts_eval_xgboost_test/scores_signal_other.parquet")
+
 #df_other["weight"]=0
 # Keep only rows that actually have scores
 df_main = df_main[df_main["bdt_score"].notna()].copy()
@@ -360,7 +364,7 @@ df_scan = pd.DataFrame({
 })
 
 df_scan = df_scan.sort_values("Ztot_opt_main", ascending=False).reset_index(drop=True)
-df_scan.to_csv("2Dscan.csv")
+#df_scan.to_csv("2Dscan.csv")
 
 
 print("=" * 70)

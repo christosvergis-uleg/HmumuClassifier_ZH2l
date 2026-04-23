@@ -1,5 +1,5 @@
 # Data files (do not commit)
-data/
+input_data/
 *.root
 *.parquet
 *.h5

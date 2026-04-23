@@ -12,8 +12,8 @@
   "random_state": 42,
   "verbose": 1,
   "tuning": {
-    "inner_cv": 3,
-    "n_iter": 50,
+    "inner_cv": 2,
+    "n_iter": 5,
     "scoring": "average_precision"
   },
   "features_final": [
@@ -27,6 +27,53 @@
     "Event_MET_Sig",
     "DPHI_MET_DIMU"
   ],
+  "feature_plotting": {
+    "enabled": true,
+    "subdir": "feature_plots",
+    "bins": 50,
+    "density": false,
+    "normalize": true,
+    "ncols": 3,
+    "atlas_label": {
+      "enabled": true,
+      "label": "ATLAS - Internal",
+      "com_energy": "$\\sqrt{s}=13.6\\ \\mathrm{TeV}$",
+      "lumi": "$165\\ \\mathrm{fb}^{-1}$"
+    },
+    "per_feature": {
+      "Muons_PT_Lead": {
+        "bins": 60,
+        "xlim": [0.0, 250.0],
+        "xlabel": "Leading muon $p_{T}$ [GeV]"
+      },
+      "Muons_PT_Sub": {
+        "bins": 60,
+        "xlim": [0.0, 200.0],
+        "xlabel": "Subleading muon $p_{T}$ [GeV]"
+      },
+      "Event_MET": {
+        "bins": 40,
+        "xlim": [100.0, 300.0],
+        "xlabel": "$E_{T}^{\\mathrm{miss}}$ [GeV]"
+      },
+      "Event_MET_Sig": {
+        "bins": 80,
+        "xlim": [0.0, 40.0],
+        "xlabel": "$E_{T}^{\\mathrm{miss}}$ [GeV]"
+      },
+      "DPHI_MET_DIMU": {
+        "bins": 50,
+        "xlim": [0.0, 3.2],
+        "xlabel": "$\\Delta\\phi(E_{T}^{\\mathrm{miss}}, \\mu\\mu)$"
+      },
+      "Jets_jetMultip":{
+        "bins": 10,
+        "xlim": [0, 10],
+        "xlabel": "$N_{j}$"
+      }
+
+    }
+  },
   "base_params": {
     "objective": "binary:logistic",
     "eval_metric": "logloss",

@@ -288,10 +288,31 @@ def main() -> None:
         refit_on_train_val=False,
     )
     '''
+    plot_cfg = cfg.get("feature_plotting", {})
+    feature_plot_dir = outdir / plot_cfg.get("subdir", "feature_plots") if plot_cfg.get("enabled", False) else None
+    atlas_cfg = plot_cfg.get("atlas_label", {})
+
+
     log.info("Starting XGBoost rotating blind training")
     log.info("Base params: %s", base_params)
     log.info("Parameter search space size: %d", len(param_dist))
-    trainer.fit(arr.X, arr.y, arr.w, fold_id=fold_id)
+    trainer.fit(
+        arr.X,
+        arr.y,
+        arr.w,
+        fold_id=fold_id,
+        feature_names=features,
+        feature_plot_dir=feature_plot_dir,
+        feature_plot_bins=int(plot_cfg.get("bins", 50)),
+        feature_plot_density=bool(plot_cfg.get("density", False)),
+        feature_plot_normalize=bool(plot_cfg.get("normalize", not plot_cfg.get("density", False))),
+        feature_plot_ncols=int(plot_cfg.get("ncols", 2)),
+        feature_plot_config=plot_cfg.get("per_feature", {}),
+        atlas_label=str(atlas_cfg.get("label", "ATLAS-Internal")),
+        com_energy=str(atlas_cfg.get("com_energy", r"$\sqrt{s}=13.6\ \mathrm{TeV}$")),
+        lumi=str(atlas_cfg.get("lumi", r"$165\ \mathrm{fb}^{-1}$")),
+        show_atlas_label=bool(atlas_cfg.get("enabled", True)),
+    )
     log.info("Training complete")
 
     df["BDT_score_blind"] = trainer.blind_pred_

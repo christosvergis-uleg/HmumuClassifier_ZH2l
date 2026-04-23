@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Sequence
 from packaging import version
 
 import numpy as np
@@ -9,6 +10,8 @@ import xgboost as xgb
 from sklearn.model_selection import RandomizedSearchCV
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.metrics import roc_auc_score, average_precision_score
+
+from eventclf.monitoring import plot_train_test_feature_distributions
 
 from .base import _prob1
 import logging
@@ -45,6 +48,8 @@ class XGBRotatingBlindTrainer:
     models_: List[xgb.XGBClassifier] = field(default_factory=list, init=False)
     best_params_per_fold_: List[Dict[str, Any]] = field(default_factory=list, init=False)
     blind_pred_: Optional[np.ndarray] = field(default=None, init=False)
+    feature_plot_paths_: List[str] = field(default_factory=list, init=False)
+
 
     def fit(
         self,
@@ -52,6 +57,18 @@ class XGBRotatingBlindTrainer:
         y: np.ndarray,
         w: Optional[np.ndarray],
         fold_id: np.ndarray,
+        *,
+        feature_names: Optional[Sequence[str]] = None,
+        feature_plot_dir: Optional[str | Path] = None,
+        feature_plot_bins: int = 50,
+        feature_plot_density: bool = False,
+        feature_plot_normalize: bool = True,
+        feature_plot_ncols: int = 2,
+        feature_plot_config: Optional[Dict[str, Any]] = None,
+        atlas_label: str = "ATLAS-Internal",
+        com_energy: str = r"$\sqrt{s}=13.6\ \mathrm{TeV}$",
+        lumi: str = r"$165\ \mathrm{fb}^{-1}$",
+        show_atlas_label: bool = True,
     ) -> "XGBRotatingBlindTrainer":
         X = np.asarray(X)
         y = np.asarray(y).astype(np.int64, copy=False)
@@ -81,12 +98,15 @@ class XGBRotatingBlindTrainer:
             Xtr, ytr = X[tr_idx], y[tr_idx]
             wtr = w_arr[tr_idx] if w_arr is not None else None
 
+            Xte, yte = X[te_idx], y[te_idx]
+            wte = w_arr[te_idx] if w_arr is not None else None
+
             # --- Tune only on training portion (4 folds) ---
             if version.parse(xgb.__version__) < version.parse("1.3.0"):
                 estimator = xgb.XGBClassifier(**self.base_params, use_label_encoder=False)
             else: 
                 estimator = xgb.XGBClassifier(**self.base_params)
-
+ 
             log.info("[Fold %d/%d] Starting hyperparameter tuning (%d iterations, %d-fold CV)",
                 k + 1, self.n_folds, self.n_iter, self.inner_cv,)
             rs = RandomizedSearchCV(
@@ -128,16 +148,42 @@ class XGBRotatingBlindTrainer:
 
             # --- Blind prediction on held-out fold k ---
             log.info("[Fold %d/%d] Predicting on blind fold", k + 1, self.n_folds)
-            p_te = _prob1(model.predict_proba(X[te_idx]))
+            p_te = _prob1(model.predict_proba(Xte))
             self.blind_pred_[te_idx] = p_te
 
             self.models_.append(model)
+
+            if feature_plot_dir is not None and feature_names is not None:
+                plot_path = Path(feature_plot_dir) / f"feature_distributions_fold{k}.png"
+                plot_train_test_feature_distributions(
+                    X_train=Xtr,
+                    y_train=ytr,
+                    X_test=Xte,
+                    y_test=yte,
+                    w_train=wtr,
+                    w_test=wte,
+                    feature_names=feature_names,
+                    output_path=plot_path,
+                    bins=feature_plot_bins,
+                    density=feature_plot_density,
+                    normalize=feature_plot_normalize,
+                    ncols=feature_plot_ncols,
+                    title=f"Input feature comparison, fold {k}",
+                    feature_plot_config=feature_plot_config,
+                    atlas_label=atlas_label,
+                    com_energy=com_energy,
+                    lumi=lumi,
+                    show_atlas_label=show_atlas_label,
+                )
+                self.feature_plot_paths_.append(str(plot_path))
+
+ 
             if w_arr is not None:
-                fold_auc = roc_auc_score(y[te_idx], p_te, sample_weight=w_arr[te_idx])
-                fold_ap = average_precision_score(y[te_idx], p_te, sample_weight=w_arr[te_idx])
+                fold_auc = roc_auc_score(yte, p_te, sample_weight=wte)
+                fold_ap = average_precision_score(yte, p_te, sample_weight=wte)
             else:
-                fold_auc = roc_auc_score(y[te_idx], p_te)
-                fold_ap = average_precision_score(y[te_idx], p_te)
+                fold_auc = roc_auc_score(yte, p_te)
+                fold_ap = average_precision_score(yte, p_te)
 
             log.info(
                 "[Fold %d/%d] Blind-fold metrics | AUC=%.6f | AP=%.6f",
@@ -146,7 +192,7 @@ class XGBRotatingBlindTrainer:
                 fold_auc,
                 fold_ap,
             )
-
+  
             log.info("[Fold %d/%d] Done", k + 1, self.n_folds)
             log.info("[Fold %d/%d] Completed in %.1f seconds",k + 1, self.n_folds, time.time() - t0,)
 
